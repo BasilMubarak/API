@@ -1,0 +1,166 @@
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
+import requests
+import logging
+from PIL import Image, ImageTk
+
+class Movie:
+    def __init__(self, api_key):
+        self.api_key = api_key
+        self.base_url = "http://www.omdbapi.com/"
+
+    def get_movie_info(self, movie_title, info_type="basic"):
+        params = {"apikey": self.api_key, "t": movie_title}
+
+        if info_type != "basic":
+            params["plot"] = "full"
+
+        try:
+            response = requests.get(self.base_url, params=params)
+            data = response.json()
+
+            if response.status_code == 200 and data["Response"] == "True":
+                if info_type == "basic":
+                    movie_info = {
+                        "Title": data['Title'],
+                        "Year": data['Year'],
+                        "Genre": data['Genre'],
+                        "IMDb Rating": data['imdbRating'],
+                        "Director": data['Director']
+                    }
+                elif info_type == "full":
+                    movie_info = {
+                        "Title": data['Title'],
+                        "Year": data['Year'],
+                        "Genre": data['Genre'],
+                        "Plot": data['Plot'],
+                        "IMDb Rating": data['imdbRating'],
+                        "Director": data['Director'],
+                        "Actors": data['Actors'],
+                        "Reviews": data['Ratings']
+                    }
+                else:
+                    movie_info = {"Error": "Invalid info_type selected."}
+
+                return movie_info
+            else:
+                error_message = f"Error: {data['Error']}"
+                return {"Error": error_message}
+        except Exception as e:
+            logging.error(f"An error occurred: {str(e)}")
+            return {"Error": f"An error occurred: {str(e)}"}
+
+class MovieApp:
+    def __init__(self, root, movie_api):
+        self.root = root
+        self.root.title("Movie Information App")
+
+        # the theme
+        style = ttk.Style()
+        style.theme_use("clam")
+
+        # sets the background color
+        self.root.configure(bg="#2C3E50")
+
+        # the different styling options
+        style.configure("TLabel", font=("Arial", 12), background="#2C3E50", foreground="#ECF0F1")
+        style.configure("TButton", font=("Arial", 12), padding=(10, 5), background="#3498DB", foreground="#ECF0F1", borderwidth=0)
+        style.configure("TCombobox", font=("Arial", 12), background="#3498DB", foreground="#ECF0F1")
+        style.configure("TCheckbutton", font=("Arial", 12), background="#2C3E50", foreground="#ECF0F1")
+        style.configure("TMenubutton", font=("Arial", 12), background="#3498DB", foreground="#ECF0F1")
+
+        # styling entry
+        entry_style = ttk.Style()
+        entry_style.configure("TEntry", fieldbackground="#3498DB", foreground="#ECF0F1", bordercolor="#3498DB")
+
+        # movie class along with the API key. this is the instance but the api key is below
+        self.movie_api = movie_api
+
+        # this is for the icon that i chose
+        try:
+            root.iconbitmap("movieicon.png")
+        except tk.TclError:
+            pass  # icon may not be displayed on certain platforms
+
+        # BG image
+        bg_image = Image.open("movieimage.jpg")  
+        bg_photo = ImageTk.PhotoImage(bg_image)
+        self.bg_label = tk.Label(root, image=bg_photo)
+        self.bg_label.image = bg_photo
+        self.bg_label.place(relwidth=1, relheight=1)
+
+        # those are the widgets
+        self.label_title = ttk.Label(root, text="Enter Movie Title:")
+        self.label_title.pack(pady=10)
+
+        self.entry_title = ttk.Entry(root, width=30, font=("Arial", 12))
+        self.entry_title.pack(pady=10)
+
+        self.label_info_type = ttk.Label(root, text="Select Information Type:")
+        self.label_info_type.pack(pady=5)
+
+        self.info_type_var = tk.StringVar()
+        self.info_type_var.set("basic")  # if the user puts basic information, they get surface level info
+        self.dropdown_info_type = ttk.Combobox(root, values=["basic", "full"], textvariable=self.info_type_var, font=("Arial", 12))
+        self.dropdown_info_type.pack(pady=5)
+
+        self.checkbox_additional_info = ttk.Checkbutton(root, text="Show Additional Details", variable=tk.BooleanVar(), style="TCheckbutton")
+        self.checkbox_additional_info.pack(pady=5)
+
+        self.button_get_info = ttk.Button(root, text="Get Movie Info", command=self.get_movie_info, style="TButton")
+        self.button_get_info.pack(pady=10)
+
+        self.result_text = tk.StringVar()
+        self.result_label = ttk.Label(root, textvariable=self.result_text, wraplength=400, font=("Arial", 12))
+        self.result_label.pack(pady=10)
+
+    def get_movie_info(self):
+        movie_title = self.entry_title.get()
+        if not movie_title:
+            messagebox.showwarning("Warning", "Please enter a movie title.")
+            return
+
+        info_type = self.info_type_var.get()
+        additional_info = self.checkbox_additional_info.instate(['selected'])
+
+        
+        movie_info = self.movie_api.get_movie_info(movie_title, info_type)
+
+        if "Error" in movie_info:
+            messagebox.showerror("Error", movie_info["Error"])
+        else:
+            formatted_info = "\n".join([f"{key}: {value}" for key, value in movie_info.items()])
+            if additional_info:
+                self.result_text.set(formatted_info)
+            else:
+                # shows the basic information
+                basic_info = "\n".join([f"{key}: {value}" for key, value in movie_info.items() if key in ["Title", "Year", "Genre", "IMDb Rating", "Director"]])
+                self.result_text.set(basic_info)
+
+        
+        logging.info(f"User requested movie info for '{movie_title}' with info_type '{info_type}' and additional_info '{additional_info}'.")
+
+if __name__ == "__main__":
+    # the API key i got from omdbapi
+    api_key = "5bc8f557"
+
+    
+    movie_api = Movie(api_key)
+
+    # logging
+    logging.basicConfig(filename="movie_app.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+    root = tk.Tk()
+
+    # this sets the position and size of the window. it can be expanded but its best if its in default
+    window_width = 600
+    window_height = 400
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+    x_position = (screen_width - window_width) // 2
+    y_position = (screen_height - window_height) // 2
+    root.geometry(f"{window_width}x{window_height}+{x_position}+{y_position}")
+
+    app = MovieApp(root, movie_api)
+    root.mainloop()
